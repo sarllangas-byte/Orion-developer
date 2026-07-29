@@ -1,0 +1,57 @@
+safety:
+  max_iterations: 10
+  max_retries_per_task: 3
+  max_files_changed: 10
+  require_human_approval: true
+  allow_main_branch_write: false
+  allow_automatic_deployment: false
+  allow_file_deletion: false
+  protected_branches:
+    - main
+    - master
+  allowed_extensions:
+    - .py
+    - .md
+    - .txt
+    - .json
+    - .yaml
+    - .yml
+    - .toml
+  ignored_directories:
+    - .git
+    - .venv
+    - __pycache__
+    - node_modules
+  sensitive_names:
+    - .env
+    - id_rsa
+    - id_ed25519
+    - credentials
+    - secrets
+
+commands:
+  tests:
+    - python
+    - -m
+    - pytest
+    - -q
+  linter:
+    - python
+    - -m
+    - ruff
+    - check
+    - .
+
+model:
+  provider: github_models
+  name: openai/gpt-4.1-mini
+  endpoint: https://models.github.ai/inference/chat/completions
+  timeout_seconds: 45
+  max_output_tokens: 4000
+  temperature: 0.1
+
+paths:
+  workspace: workspace/geostab
+  database: memory/orion.db
+  logs: logs/orion.jsonl
+  reports: reports
