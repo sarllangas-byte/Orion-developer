@@ -23,6 +23,7 @@ class SafetyConfig:
     allowed_extensions: tuple[str, ...]
     ignored_directories: tuple[str, ...]
     sensitive_names: tuple[str, ...]
+    max_identical_errors: int = 2
 
 
 @dataclass(frozen=True)
@@ -46,6 +47,7 @@ class OrionConfig:
     model: ModelConfig
     test_command: tuple[str, ...]
     lint_command: tuple[str, ...]
+    allowed_commands: tuple[tuple[str, ...], ...] = ()
 
 
 def _read_dotenv(path: Path) -> None:
@@ -94,6 +96,7 @@ def load_config(config_path: str | Path = "config.yaml") -> OrionConfig:
         allowed_extensions=tuple(_required(safety_raw, "allowed_extensions")),
         ignored_directories=tuple(_required(safety_raw, "ignored_directories")),
         sensitive_names=tuple(_required(safety_raw, "sensitive_names")),
+        max_identical_errors=int(safety_raw.get("max_identical_errors", 2)),
     )
     if min(
         safety.max_iterations,
@@ -119,6 +122,9 @@ def load_config(config_path: str | Path = "config.yaml") -> OrionConfig:
         candidate = Path(value)
         return candidate if candidate.is_absolute() else root / candidate
 
+    configured_allowed = commands_raw.get(
+        "allowed", [commands_raw["tests"], commands_raw["linter"]]
+    )
     return OrionConfig(
         root=root,
         workspace=workspace.resolve(),
@@ -129,4 +135,7 @@ def load_config(config_path: str | Path = "config.yaml") -> OrionConfig:
         model=model,
         test_command=tuple(str(part) for part in _required(commands_raw, "tests")),
         lint_command=tuple(str(part) for part in _required(commands_raw, "linter")),
+        allowed_commands=tuple(
+            tuple(str(part) for part in command) for command in configured_allowed
+        ),
     )

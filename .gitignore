@@ -4,8 +4,10 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
+STOP_AGENT
 logs/*.jsonl
 reports/*.md
 memory/*.db
 workspace/geostab/
+workspace/geostab-demo/
 !workspace/.gitkeep

@@ -45,6 +45,24 @@ class MemoryDatabase:
                 (status, objective_id),
             )
 
+    def save_mission(self, objective_id: int, mission: dict[str, Any]) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO missions(objective_id, mission_json, status)
+                VALUES (?, ?, ?)
+                ON CONFLICT(objective_id) DO UPDATE SET
+                    mission_json = excluded.mission_json,
+                    status = excluded.status,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (
+                    objective_id,
+                    json.dumps(mission, ensure_ascii=False),
+                    str(mission["status"]),
+                ),
+            )
+
     def create_task(self, objective_id: int, title: str) -> int:
         with self.connect() as connection:
             cursor = connection.execute(
@@ -198,3 +216,15 @@ class MemoryDatabase:
             "actions": [dict(row) for row in actions],
             "lessons": [dict(row) for row in lessons],
         }
+
+    def latest_mission(self) -> dict[str, Any] | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT mission_json
+                FROM missions
+                ORDER BY objective_id DESC
+                LIMIT 1
+                """
+            ).fetchone()
+        return json.loads(row["mission_json"]) if row else None

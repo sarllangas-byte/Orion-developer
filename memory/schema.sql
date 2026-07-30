@@ -8,6 +8,13 @@ CREATE TABLE IF NOT EXISTS objectives (
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS missions (
+    objective_id INTEGER PRIMARY KEY REFERENCES objectives(id),
+    mission_json TEXT NOT NULL,
+    status TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     objective_id INTEGER NOT NULL REFERENCES objectives(id),

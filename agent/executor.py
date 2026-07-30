@@ -1,4 +1,4 @@
-"""Conversion d'un plan approuvé en changements de fichiers contrôlés."""
+"""Conversion d'un plan approuvé en opérations de fichiers contrôlées."""
 
 from __future__ import annotations
 
@@ -7,82 +7,77 @@ from typing import Any
 
 from agent.model_client import GitHubModelsClient
 from agent.planner import is_rga_demo_objective
-from agent.state import FileChange, Plan, ToolResult
+from agent.state import FileOperation, Plan, ToolResult
 from tools.filesystem_tools import FileSystemTools
 from tools.security_tools import SecurityGuard
 
-RGA_MODULE = '''"""Calcul pédagogique d'un score RGA fictif.
-
-Ce module n'est pas un diagnostic et ses pondérations doivent être validées par un expert.
-"""
+RGA_MODULE = '''"""Scoring pédagogique du risque retrait-gonflement des argiles."""
 
 from __future__ import annotations
 
-ALEA_SCORES = {"faible": 20.0, "moyen": 60.0, "fort": 100.0}
+HAZARD_SCORES = {"low": 20.0, "medium": 60.0, "high": 100.0}
 
 
-def calculer_score_exposition_rga(
-    niveau_alea: str,
-    historique_sinistre: bool,
-    vulnerabilite_batiment: float,
+def calculate_rga_exposure_score(
+    hazard_level: str,
+    claim_history: bool,
+    vulnerability: float,
 ) -> float:
-    """Retourne un score fictif de 0 à 100 à partir de trois facteurs.
+    """Return a fictitious exposure score from 0 to 100.
 
-    Pondérations : aléa 50 %, historique 30 %, vulnérabilité 20 %.
+    Weights: hazard 50%, claim history 30%, vulnerability 20%.
+    This is a demonstration formula, not a geotechnical diagnosis.
     """
-    if not isinstance(niveau_alea, str) or niveau_alea.lower() not in ALEA_SCORES:
-        raise ValueError("niveau_alea doit être 'faible', 'moyen' ou 'fort'.")
-    if not isinstance(historique_sinistre, bool):
-        raise TypeError("historique_sinistre doit être un booléen.")
-    if isinstance(vulnerabilite_batiment, bool) or not isinstance(
-        vulnerabilite_batiment, int | float
-    ):
-        raise TypeError("vulnerabilite_batiment doit être un nombre.")
-    if not 0 <= vulnerabilite_batiment <= 100:
-        raise ValueError("vulnerabilite_batiment doit être comprise entre 0 et 100.")
+    if not isinstance(hazard_level, str) or hazard_level.lower() not in HAZARD_SCORES:
+        raise ValueError("hazard_level must be 'low', 'medium' or 'high'.")
+    if not isinstance(claim_history, bool):
+        raise TypeError("claim_history must be a boolean.")
+    if isinstance(vulnerability, bool) or not isinstance(vulnerability, int | float):
+        raise TypeError("vulnerability must be a number.")
+    if not 0 <= vulnerability <= 100:
+        raise ValueError("vulnerability must be between 0 and 100.")
 
-    alea = ALEA_SCORES[niveau_alea.lower()]
-    historique = 100.0 if historique_sinistre else 0.0
-    score = 0.50 * alea + 0.30 * historique + 0.20 * vulnerabilite_batiment
-    return round(score, 2)
+    hazard = HAZARD_SCORES[hazard_level.lower()]
+    claims = 100.0 if claim_history else 0.0
+    return round(min(100.0, max(0.0, 0.50 * hazard + 0.30 * claims + 0.20 * vulnerability)), 2)
 '''
 
 RGA_TESTS = '''import pytest
 
-from geostab_demo.rga import calculer_score_exposition_rga
+from geostab.scoring import calculate_rga_exposure_score
 
 
 @pytest.mark.parametrize(
-    ("alea", "historique", "vulnerabilite", "attendu"),
+    ("hazard", "claims", "vulnerability", "expected"),
     [
-        ("faible", False, 0, 10.0),
-        ("moyen", True, 50, 70.0),
-        ("fort", True, 100, 100.0),
+        ("low", False, 0, 10.0),
+        ("medium", True, 50, 70.0),
+        ("high", True, 100, 100.0),
     ],
 )
-def test_calculer_score_exposition_rga(alea, historique, vulnerabilite, attendu):
-    assert calculer_score_exposition_rga(alea, historique, vulnerabilite) == attendu
+def test_calculate_rga_exposure_score(hazard, claims, vulnerability, expected):
+    assert calculate_rga_exposure_score(hazard, claims, vulnerability) == expected
 
 
-def test_accepte_la_casse_du_niveau_alea():
-    assert calculer_score_exposition_rga("FORT", False, 50) == 60.0
+def test_accepts_case_insensitive_hazard():
+    assert calculate_rga_exposure_score("HIGH", False, 50) == 60.0
 
 
-@pytest.mark.parametrize("niveau", ["inconnu", "", None])
-def test_refuse_un_niveau_alea_invalide(niveau):
+@pytest.mark.parametrize("hazard", ["unknown", "", None])
+def test_rejects_invalid_hazard(hazard):
     with pytest.raises(ValueError):
-        calculer_score_exposition_rga(niveau, False, 10)
+        calculate_rga_exposure_score(hazard, False, 10)
 
 
-@pytest.mark.parametrize("valeur", [-1, 101])
-def test_refuse_une_vulnerabilite_hors_limites(valeur):
+@pytest.mark.parametrize("value", [-1, 101])
+def test_rejects_out_of_range_vulnerability(value):
     with pytest.raises(ValueError):
-        calculer_score_exposition_rga("moyen", False, valeur)
+        calculate_rga_exposure_score("medium", False, value)
 
 
-def test_refuse_un_historique_non_booleen():
+def test_rejects_non_boolean_claim_history():
     with pytest.raises(TypeError):
-        calculer_score_exposition_rga("moyen", 1, 50)
+        calculate_rga_exposure_score("medium", 1, 50)
 '''
 
 
@@ -99,19 +94,19 @@ class Executor:
         self.filesystem = filesystem
         self.guard = guard
 
-    def propose_changes(self, plan: Plan) -> list[FileChange]:
+    def propose_changes(self, plan: Plan) -> list[FileOperation]:
         if is_rga_demo_objective(plan.objective):
             return [
-                FileChange("geostab_demo/rga.py", RGA_MODULE, "Ajouter le calcul RGA fictif."),
-                FileChange("tests/test_rga.py", RGA_TESTS, "Tester calcul et validation."),
+                self._operation("geostab/scoring.py", RGA_MODULE, "Ajouter le calcul RGA."),
+                self._operation("tests/test_scoring.py", RGA_TESTS, "Ajouter les tests RGA."),
             ]
         context = self._read_context(plan.files_to_read)
         return self._remote_changes("coder_prompt.md", plan, context=context)
 
-    def propose_correction(self, plan: Plan, test_output: str) -> list[FileChange]:
+    def propose_correction(self, plan: Plan, test_output: str) -> list[FileOperation]:
         if is_rga_demo_objective(plan.objective):
             return []
-        context = self._read_context(plan.files_to_modify)
+        context = self._read_context(plan.files_to_modify + plan.files_to_create)
         return self._remote_changes(
             "reviewer_prompt.md",
             plan,
@@ -120,30 +115,38 @@ class Executor:
         )
 
     def apply_changes(
-        self, changes: list[FileChange], approved_paths: list[str], already_changed: set[str]
+        self,
+        changes: list[FileOperation],
+        approved_paths: list[str],
+        already_changed: set[str],
+        *,
+        max_files: int | None = None,
     ) -> list[ToolResult]:
         if not changes:
             return []
         approved = set(approved_paths)
-        proposed = {change.path for change in changes}
+        proposed = {change.file for change in changes}
         if not proposed <= approved:
-            unexpected = sorted(proposed - approved)
-            raise PermissionError(f"Changement hors plan approuvé : {unexpected}")
-        self.guard.ensure_file_budget(already_changed | proposed)
+            raise PermissionError(f"Changement hors plan approuvé : {sorted(proposed - approved)}")
+        self.guard.ensure_file_budget(already_changed | proposed, max_files)
         results: list[ToolResult] = []
         for change in changes:
-            target = self.guard.resolve(change.path, for_write=True)
-            operation = (
-                self.filesystem.write_file
-                if target.exists()
-                else self.filesystem.create_file
-            )
-            result = operation(change.path, change.content)
+            result = self.filesystem.apply_operation(change)
             results.append(result)
             if not result.ok:
                 break
-            already_changed.add(change.path)
+            already_changed.add(change.file)
         return results
+
+    def _operation(self, path: str, content: str, reason: str) -> FileOperation:
+        target = self.guard.resolve(path, for_write=True)
+        return FileOperation(
+            operation="replace" if target.is_file() else "create",
+            file=path,
+            reason=reason,
+            original_hash=self.filesystem.sha256(target) if target.is_file() else None,
+            content=content,
+        )
 
     def _read_context(self, paths: list[str]) -> dict[str, str]:
         context: dict[str, str] = {}
@@ -153,17 +156,23 @@ class Executor:
                 context[path] = str(result.data["content"])
         return context
 
-    def _remote_changes(self, prompt_name: str, plan: Plan, **extra: Any) -> list[FileChange]:
+    def _remote_changes(self, prompt_name: str, plan: Plan, **extra: Any) -> list[FileOperation]:
         system = (self.root / "prompts" / "system_prompt.md").read_text(encoding="utf-8")
         instruction = (self.root / "prompts" / prompt_name).read_text(encoding="utf-8")
-        response = self.model.complete_json(
-            system,
-            instruction,
-            {"plan": plan.to_dict(), **extra},
-        )
+        response = self.model.complete_json(system, instruction, {"plan": plan.to_dict(), **extra})
         raw_changes = response.get("changes")
         if not isinstance(raw_changes, list):
             raise ValueError("Réponse codeur invalide : changes doit être une liste.")
-        changes = [FileChange.from_dict(item) for item in raw_changes]
-        self.guard.ensure_file_budget({change.path for change in changes})
-        return changes
+        operations: list[FileOperation] = []
+        for raw in raw_changes:
+            if "file" not in raw and "path" in raw:
+                raw["file"] = raw.pop("path")
+            target = self.guard.resolve(str(raw["file"]), for_write=True)
+            if "operation" not in raw:
+                raw["operation"] = "replace" if target.is_file() else "create"
+            if raw["operation"] == "replace" and not raw.get("original_hash"):
+                raw["original_hash"] = (
+                    self.filesystem.sha256(target) if target.is_file() else None
+                )
+            operations.append(FileOperation.from_dict(raw))
+        return operations
