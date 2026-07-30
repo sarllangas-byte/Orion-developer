@@ -9,7 +9,7 @@ import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
-from agent.state import ToolResult
+from agent.state import FileOperation, ToolResult
 from tools.audit import AuditLogger
 from tools.security_tools import SecurityGuard
 
@@ -124,6 +124,53 @@ class FileSystemTools:
 
     def write_file(self, relative_path: str, content: str) -> ToolResult:
         return self._write(relative_path, content, must_exist=True)
+
+    def apply_operation(self, operation: FileOperation) -> ToolResult:
+        """Applique une opération vérifiée et conserve une sauvegarde temporaire."""
+        try:
+            self.guard.validate_content(operation.content)
+            target = self.guard.resolve(operation.file, for_write=True)
+            exists = target.is_file()
+            if operation.operation == "replace" and not exists:
+                raise FileNotFoundError(f"Le fichier à remplacer n'existe pas : {operation.file}")
+            if operation.operation == "create" and target.exists():
+                raise FileExistsError(f"Le fichier à créer existe déjà : {operation.file}")
+            current_hash = self.sha256(target) if exists else None
+            if operation.operation == "replace" and operation.original_hash != current_hash:
+                raise PermissionError("Le fichier a changé depuis l'analyse (hash différent).")
+            backup_path: str | None = None
+            if exists:
+                with tempfile.NamedTemporaryFile(
+                    mode="wb", prefix="orion-backup-", suffix=target.suffix, delete=False
+                ) as backup:
+                    backup.write(target.read_bytes())
+                    backup_path = backup.name
+            result = self._write(
+                operation.file,
+                operation.content,
+                must_exist=operation.operation == "replace",
+            )
+            if result.ok:
+                result.data["operation"] = operation.operation
+                result.data["reason"] = operation.reason
+                result.data["backup_path"] = backup_path
+            return result
+        except Exception as exc:
+            result = ToolResult(
+                False,
+                "apply_operation",
+                "Opération contrôlée refusée.",
+                {"path": operation.file, "operation": operation.operation},
+                str(exc),
+            )
+            self.audit.log(
+                "tool_call",
+                tool="apply_operation",
+                path=operation.file,
+                operation=operation.operation,
+                result=result.to_dict(),
+            )
+            return result
 
     def _write(self, relative_path: str, content: str, *, must_exist: bool) -> ToolResult:
         tool_name = "write_file" if must_exist else "create_file"

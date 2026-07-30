@@ -1,0 +1,11 @@
+{
+  "objective": "Ajouter calculate_rga_exposure_score à partir du niveau d'aléa, de l'historique de sinistres et de la vulnérabilité, avec un score de 0 à 100, des validations et des tests unitaires.",
+  "repository": "workspace/geostab-demo",
+  "constraints": [
+    "Formule fictive réservée au bac à sable",
+    "Aucune donnée client ou réelle",
+    "Aucun merge ni déploiement automatique"
+  ],
+  "max_files_changed": 5,
+  "max_iterations": 10
+}

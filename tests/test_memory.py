@@ -17,6 +17,7 @@ def test_sqlite_memory_contains_all_required_tables(tmp_path: Path):
         "approvals",
         "lessons",
         "file_changes",
+        "missions",
     }
     with sqlite3.connect(database.path) as connection:
         tables = {

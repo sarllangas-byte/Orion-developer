@@ -14,7 +14,7 @@ def safety() -> SafetyConfig:
     return SafetyConfig(
         max_iterations=10,
         max_retries_per_task=3,
-        max_files_changed=10,
+        max_files_changed=5,
         require_human_approval=True,
         allow_main_branch_write=False,
         allow_automatic_deployment=False,
@@ -23,6 +23,7 @@ def safety() -> SafetyConfig:
         allowed_extensions=(".py", ".md", ".txt", ".json", ".yaml", ".yml", ".toml"),
         ignored_directories=(".git", ".venv", "__pycache__", "node_modules"),
         sensitive_names=(".env", "id_rsa", "id_ed25519", "credentials", "secrets"),
+        max_identical_errors=2,
     )
 
 
@@ -43,13 +44,18 @@ def git_workspace(tmp_path: Path) -> Path:
     workspace = tmp_path / "repo"
     workspace.mkdir()
     (workspace / "README.md").write_text("# Démonstration\n", encoding="utf-8")
-    (workspace / "geostab_demo").mkdir()
-    (workspace / "geostab_demo" / "__init__.py").write_text(
-        '"""Démo."""\n', encoding="utf-8"
+    (workspace / "geostab").mkdir()
+    (workspace / "geostab" / "__init__.py").write_text('"""Démo."""\n', encoding="utf-8")
+    (workspace / "geostab" / "scoring.py").write_text(
+        '"""Scoring initial."""\n', encoding="utf-8"
     )
     (workspace / "tests").mkdir()
     (workspace / "tests" / "test_smoke.py").write_text(
         "def test_smoke():\n    assert True\n", encoding="utf-8"
+    )
+    (workspace / "tests" / "test_scoring.py").write_text(
+        "from geostab import scoring\n\n\ndef test_import():\n    assert scoring.__doc__\n",
+        encoding="utf-8",
     )
     (workspace / "pyproject.toml").write_text(
         '[tool.pytest.ini_options]\ntestpaths = ["tests"]\n'
@@ -65,10 +71,10 @@ def git_workspace(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def orion_config(
-    tmp_path: Path, git_workspace: Path, safety: SafetyConfig
-) -> OrionConfig:
+def orion_config(tmp_path: Path, git_workspace: Path, safety: SafetyConfig) -> OrionConfig:
     root = Path(__file__).resolve().parents[1]
+    tests = (sys.executable, "-m", "pytest", "-q")
+    lint = (sys.executable, "-m", "ruff", "check", ".")
     return OrionConfig(
         root=root,
         workspace=git_workspace,
@@ -84,6 +90,7 @@ def orion_config(
             max_output_tokens=1000,
             temperature=0.1,
         ),
-        test_command=(sys.executable, "-m", "pytest", "-q"),
-        lint_command=(sys.executable, "-m", "ruff", "check", "."),
+        test_command=tests,
+        lint_command=lint,
+        allowed_commands=(tests, lint),
     )

@@ -1,4 +1,4 @@
-"""Crée un dépôt de démonstration local propre dans workspace/geostab."""
+"""Crée un dépôt de démonstration propre dans workspace/geostab-demo."""
 
 from __future__ import annotations
 
@@ -23,10 +23,10 @@ def run_git(workspace: Path, *arguments: str) -> None:
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
     source = root / "examples" / "geostab-demo"
-    workspace = root / "workspace" / "geostab"
+    workspace = root / "workspace" / "geostab-demo"
     if workspace.exists() and any(workspace.iterdir()):
         raise RuntimeError(
-            "workspace/geostab existe déjà et n'est pas vide. "
+            "workspace/geostab-demo existe déjà et n'est pas vide. "
             "Aucune donnée n'a été supprimée."
         )
     workspace.mkdir(parents=True, exist_ok=True)

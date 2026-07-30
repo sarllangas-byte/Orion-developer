@@ -1,7 +1,8 @@
 safety:
   max_iterations: 10
   max_retries_per_task: 3
-  max_files_changed: 10
+  max_identical_errors: 2
+  max_files_changed: 5
   require_human_approval: true
   allow_main_branch_write: false
   allow_automatic_deployment: false
@@ -41,6 +42,13 @@ commands:
     - ruff
     - check
     - .
+  allowed:
+    - [python, -m, pytest, -q]
+    - [python, -m, ruff, check, .]
+    - [python, -m, mypy, .]
+    - [npm, test]
+    - [npm, run, lint]
+    - [npm, run, build]
 
 model:
   provider: github_models
@@ -51,7 +59,7 @@ model:
   temperature: 0.1
 
 paths:
-  workspace: workspace/geostab
+  workspace: workspace/geostab-demo
   database: memory/orion.db
   logs: logs/orion.jsonl
   reports: reports
